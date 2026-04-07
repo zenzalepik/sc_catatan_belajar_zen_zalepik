@@ -23,7 +23,13 @@ zen-zalepik/
 │   └── styles.css               # Custom styles
 ├── js/
 │   ├── config.js                # ⭐ Konfigurasi courses
-│   ├── data.js                  # ⭐ Data chapters & sub-chapters
+│   ├── data-chapters.js         # ⭐ Data chapters (modular)
+│   ├── data/                    # 📚 Folder data modular (ES6)
+│   │   ├── index.js            # Main export
+│   │   ├── laravel.js          # Laravel chapters
+│   │   ├── python.js           # Python chapters
+│   │   ├── rust.js             # Rust chapters
+│   │   └── podman.js           # Podman chapters
 │   ├── database.js              # IndexedDB operations
 │   ├── utils.js                 # Utility functions
 │   ├── router.js                # Navigation router
@@ -48,13 +54,134 @@ zen-zalepik/
         └── 03-pods-networking.md
 ```
 
+**Catatan:** 
+- File `js/data-chapters.js` adalah versi modular yang sudah digabung untuk browser
+- Folder `js/data/` berisi file-file terpisah untuk development (ES6 modules)
+- Untuk production, gunakan `data-chapters.js` agar kompatibel dengan browser tanpa bundler
+
 ---
 
 ## 🎓 Cara Menambah Course Baru
 
-### **Step 1: Tambah Konfigurasi Course**
+### **Metode 1: Sistem Modular (Recommended)**
 
-Buka file `js/config.js` dan tambahkan konfigurasi course baru di dalam `COURSES_CONFIG`:
+Dengan sistem modular, setiap course memiliki file terpisah sehingga lebih mudah di-maintain.
+
+#### **Step 1: Buat File Data Course**
+
+Buat file baru di folder `js/data/`:
+
+```bash
+# Contoh: Menambah course JavaScript
+touch js/data/javascript.js
+```
+
+Isi file `js/data/javascript.js`:
+
+```javascript
+// JavaScript Course Chapters Data
+
+export const javascriptChapters = [
+    {
+        id: 'javascript-1',
+        title: 'Dasar-dasar JavaScript',
+        mdFile: 'md/javascript/01-basics.md',
+        subChapters: [
+            { id: 'javascript-1-1', title: 'Variabel', mdFile: 'md/javascript/01-basics.md#variabel' },
+            { id: 'javascript-1-2', title: 'Fungsi', mdFile: 'md/javascript/01-basics.md#fungsi' },
+            { id: 'javascript-1-3', title: 'DOM', mdFile: 'md/javascript/01-basics.md#dom' }
+        ]
+    }
+];
+```
+
+#### **Step 2: Update Index Module**
+
+Buka `js/data/index.js` dan tambahkan import/export:
+
+```javascript
+import { laravelChapters } from './laravel.js';
+import { pythonChapters } from './python.js';
+import { rustChapters } from './rust.js';
+import { podmanChapters } from './podman.js';
+import { javascriptChapters } from './javascript.js'; // ⬅️ Tambahkan ini
+
+export const CHAPTERS_DATA = {
+    laravel: laravelChapters,
+    python: pythonChapters,
+    rust: rustChapters,
+    podman: podmanChapters,
+    javascript: javascriptChapters  // ⬅️ Tambahkan ini
+};
+
+// Export individual
+export { laravelChapters } from './laravel.js';
+export { pythonChapters } from './python.js';
+export { rustChapters } from './rust.js';
+export { podmanChapters } from './podman.js';
+export { javascriptChapters } from './javascript.js';  // ⬅️ Tambahkan ini
+```
+
+#### **Step 3: Update data-chapters.js**
+
+Untuk kompatibilitas browser (tanpa ES6 modules), tambahkan juga di `js/data-chapters.js`:
+
+```javascript
+// JavaScript Course Chapters Data
+const javascriptChapters = [
+    {
+        id: 'javascript-1',
+        title: 'Dasar-dasar JavaScript',
+        mdFile: 'md/javascript/01-basics.md',
+        subChapters: [
+            { id: 'javascript-1-1', title: 'Variabel', mdFile: 'md/javascript/01-basics.md#variabel' },
+            { id: 'javascript-1-2', title: 'Fungsi', mdFile: 'md/javascript/01-basics.md#fungsi' },
+            { id: 'javascript-1-3', title: 'DOM', mdFile: 'md/javascript/01-basics.md#dom' }
+        ]
+    }
+];
+
+// Update CHAPTERS_DATA object
+const CHAPTERS_DATA = {
+    laravel: laravelChapters,
+    python: pythonChapters,
+    rust: rustChapters,
+    podman: podmanChapters,
+    javascript: javascriptChapters  // ⬅️ Tambahkan ini
+};
+```
+
+#### **Step 4: Tambah Konfigurasi Course**
+
+Buka file `js/config.js` dan tambahkan:
+
+```javascript
+javascript: {
+    id: 'javascript',
+    title: 'JavaScript',
+    icon: 'ri-javascript-line',
+    iconColor: 'text-yellow-500',
+    description: 'Bahasa Pemrograman Web Interaktif',
+    color: 'from-yellow-400 to-orange-500',
+    mdFolder: 'md/javascript/'
+}
+```
+
+#### **Step 5: Buat Folder Materi**
+
+```bash
+mkdir md/javascript
+```
+
+---
+
+### **Metode 2: Edit Langsung di data-chapters.js**
+
+Jika tidak ingin menggunakan sistem modular, bisa langsung edit `js/data-chapters.js`:
+
+1. Buka `js/data-chapters.js`
+2. Tambahkan array chapters untuk course baru
+3. Tambahkan ke object `CHAPTERS_DATA`
 
 ```javascript
 const COURSES_CONFIG = {
@@ -679,3 +806,57 @@ Jika ada pertanyaan atau masalah, silakan buat issue di repository ini.
 ---
 
 **Happy Learning! 🎓✨**
+
+---
+
+## 📦 Sistem Modular
+
+### **Keuntungan Sistem Modular**
+
+✅ **Mudah di-maintain** - Setiap course di file terpisah  
+✅ **Collaboration-friendly** - Multiple developer bisa kerja bareng tanpa conflict  
+✅ **Scalable** - Mudah menambah course baru  
+✅ **Organized** - Struktur folder yang jelas  
+✅ **Reusable** - Bisa import specific course kalau dibutuhkan  
+
+### **Struktur Folder Modular**
+
+```
+js/data/
+├── index.js              # Main export (untuk ES6 modules)
+├── laravel.js            # Laravel chapters data
+├── python.js             # Python chapters data
+├── rust.js               # Rust chapters data
+├── podman.js             # Podman chapters data
+└── javascript.js         # (Contoh) Course baru
+```
+
+### **Development vs Production**
+
+**Development (ES6 Modules):**
+```javascript
+// File: js/data/index.js
+import { laravelChapters } from './laravel.js';
+import { pythonChapters } from './python.js';
+
+export const CHAPTERS_DATA = {
+    laravel: laravelChapters,
+    python: pythonChapters
+};
+```
+
+**Production (Browser Compatible):**
+```javascript
+// File: js/data-chapters.js
+const laravelChapters = [...];
+const pythonChapters = [...];
+
+const CHAPTERS_DATA = {
+    laravel: laravelChapters,
+    python: pythonChapters
+};
+```
+
+**Kenapa ada 2 versi?**
+- `js/data/*.js` - Untuk development dengan ES6 modules (butuh bundler)
+- `js/data-chapters.js` - Untuk production, langsung jalan di browser tanpa bundler
