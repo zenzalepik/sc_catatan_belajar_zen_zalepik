@@ -108,6 +108,11 @@ const database = {
         });
     },
 
+    async saveSubChapterProgress(userId, subChapterId, chapterId, courseId, completed) {
+        // Save progress for sub-chapter (using subChapterId as chapterId in database)
+        return this.saveProgress(userId, subChapterId, courseId, completed);
+    },
+
     async getUserProgress(userId) {
         return new Promise((resolve, reject) => {
             const transaction = db.transaction(['progress'], 'readonly');

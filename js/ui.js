@@ -101,42 +101,113 @@ const ui = {
 
         chapters.forEach((chapter, index) => {
             const chapterCard = document.createElement('div');
-            chapterCard.className = 'chapter-card card bg-white border border-gray-200 hover:border-primary-300 rounded-2xl';
+            chapterCard.className = 'chapter-card card bg-white border border-gray-200 hover:border-primary-300 rounded-2xl overflow-hidden';
+            
+            // Count completed sub-chapters
+            const subChapters = chapter.subChapters || [];
+            const totalSubChapters = subChapters.length;
+            
             chapterCard.innerHTML = `
-                <div class="card-body p-5 chapter-header flex justify-between items-center cursor-pointer">
-                    <div class="flex items-center gap-4">
+                <div class="chapter-header flex justify-between items-center cursor-pointer p-5 hover:bg-gray-50 transition-all">
+                    <div class="flex items-center gap-4 flex-1">
                         <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 text-white flex items-center justify-center font-bold text-sm shadow-md flex-shrink-0">
                             ${index + 1}
                         </span>
-                        <span class="font-semibold text-lg chapter-title text-gray-900">${chapter.title}</span>
+                        <div class="flex-1">
+                            <span class="font-semibold text-lg chapter-title text-gray-900 block">${chapter.title}</span>
+                            <span class="text-xs text-gray-500 subchapter-count">${totalSubChapters} sub-chapter</span>
+                        </div>
                     </div>
                     <div class="flex items-center gap-3">
                         <span class="badge badge-ghost status-badge pending text-xs px-4 py-2 rounded-full font-medium" id="status-list-${chapter.id}">
                             <i class="ri-time-line mr-1"></i> Belum Selesai
                         </span>
-                        <i class="ri-arrow-right-s-line text-2xl text-gray-400"></i>
+                        <i class="ri-arrow-down-s-line text-2xl text-gray-400 toggle-icon transition-transform"></i>
                     </div>
+                </div>
+                <div class="subchapters-container hidden bg-gray-50 border-t border-gray-200" id="subchapters-${chapter.id}">
+                    <div class="p-4 space-y-2" id="subchapters-list-${chapter.id}"></div>
                 </div>
             `;
 
             chaptersListView.appendChild(chapterCard);
+            
+            // Add sub-chapters
+            if (subChapters.length > 0) {
+                const subChaptersList = document.getElementById(`subchapters-list-${chapter.id}`);
+                subChapters.forEach((subChapter, subIndex) => {
+                    const subChapterItem = document.createElement('div');
+                    subChapterItem.className = 'subchapter-item flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-primary-300 transition-all cursor-pointer';
+                    subChapterItem.innerHTML = `
+                        <div class="flex items-center gap-3 flex-1">
+                            <input type="checkbox" id="checkbox-${subChapter.id}" class="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer" data-subchapter="${subChapter.id}" data-chapter="${chapter.id}" data-course="${courseId}">
+                            <label for="checkbox-${subChapter.id}" class="flex-1 cursor-pointer">
+                                <span class="text-sm font-medium text-gray-700 block">${subChapter.title}</span>
+                                <span class="text-xs text-gray-500">Sub-chapter ${subIndex + 1}</span>
+                            </label>
+                        </div>
+                        <button class="view-subchapter-btn px-3 py-1.5 text-xs font-medium text-primary-600 hover:bg-primary-50 rounded-lg transition-all" data-subchapter="${subChapter.id}" data-chapter="${chapter.id}" data-course="${courseId}">
+                            <i class="ri-book-open-line"></i> Baca
+                        </button>
+                    `;
+                    subChaptersList.appendChild(subChapterItem);
+                });
+            }
         });
 
-        // Add event listeners
+        // Add event listeners for chapter headers (accordion toggle)
         chaptersListView.querySelectorAll('.chapter-header').forEach(header => {
-            header.addEventListener('click', async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const chapterId = header.closest('.chapter-card').querySelector('.status-badge').id.replace('status-list-', '');
-                const chapterCard = header.closest('.chapter-card');
-
-                // Allow re-visiting completed chapters for review
-                if (chapterCard.classList.contains('completed')) {
-                    utils.showNotification('Membuka chapter yang sudah selesai untuk ditinjau', 'success');
+            header.addEventListener('click', (e) => {
+                // Don't toggle if clicking on checkbox or button
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+                    return;
                 }
+                
+                const chapterId = header.querySelector('.status-badge').id.replace('status-list-', '');
+                const subChaptersContainer = document.getElementById(`subchapters-${chapterId}`);
+                const toggleIcon = header.querySelector('.toggle-icon');
+                
+                // Toggle visibility
+                if (subChaptersContainer.classList.contains('hidden')) {
+                    subChaptersContainer.classList.remove('hidden');
+                    toggleIcon.style.transform = 'rotate(180deg)';
+                } else {
+                    subChaptersContainer.classList.add('hidden');
+                    toggleIcon.style.transform = 'rotate(0deg)';
+                }
+            });
+        });
 
-                await this.openIsolatedChapter(courseId, chapterId);
+        // Add event listeners for sub-chapter checkboxes
+        chaptersListView.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', async (e) => {
+                const subChapterId = e.target.dataset.subchapter;
+                const chapterId = e.target.dataset.chapter;
+                const courseId = e.target.dataset.course;
+                const isChecked = e.target.checked;
+                
+                // Save progress
+                await database.saveSubChapterProgress(app.currentUser.id, subChapterId, chapterId, courseId, isChecked);
+                
+                // Update UI
+                await this.updateSubChapterUI(courseId, chapterId);
+                
+                // Show notification
+                if (isChecked) {
+                    utils.showNotification('✅ Sub-chapter selesai!', 'success');
+                }
+            });
+        });
+
+        // Add event listeners for view sub-chapter buttons
+        chaptersListView.querySelectorAll('.view-subchapter-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const subChapterId = e.target.closest('button').dataset.subchapter;
+                const chapterId = e.target.closest('button').dataset.chapter;
+                const courseId = e.target.closest('button').dataset.course;
+                
+                await this.openSubChapterView(courseId, chapterId, subChapterId);
             });
         });
 
@@ -151,10 +222,13 @@ const ui = {
         try {
             const progress = await database.getUserProgress(app.currentUser.id);
 
-            CHAPTERS_DATA[courseId].forEach(chapter => {
+            CHAPTERS_DATA[courseId].forEach(async chapter => {
                 const chapterProgress = progress.find(p => p.chapterId === chapter.id);
 
-                if (chapterProgress && chapterProgress.completed) {
+                // Check if all sub-chapters are completed
+                const allSubChaptersCompleted = await this.checkAllSubChaptersCompleted(chapter.id, chapter.subChapters);
+
+                if (allSubChaptersCompleted) {
                     const statusBadge = document.getElementById(`status-list-${chapter.id}`);
                     const chapterCard = document.querySelector(`#status-list-${chapter.id}`)?.closest('.chapter-card');
 
@@ -168,10 +242,268 @@ const ui = {
                         chapterCard.classList.add('completed');
                     }
                 }
+
+                // Load sub-chapter progress
+                if (chapter.subChapters) {
+                    for (const subChapter of chapter.subChapters) {
+                        const subChapterProgress = progress.find(p => p.chapterId === subChapter.id);
+                        const checkbox = document.getElementById(`checkbox-${subChapter.id}`);
+                        if (checkbox && subChapterProgress && subChapterProgress.completed) {
+                            checkbox.checked = true;
+                        }
+                    }
+                }
             });
         } catch (error) {
             console.error('Error loading progress:', error);
         }
+    },
+
+    // ==================== Check All Sub-Chapters Completed ====================
+    async checkAllSubChaptersCompleted(chapterId, subChapters) {
+        if (!subChapters || subChapters.length === 0) return false;
+
+        const progress = await database.getUserProgress(app.currentUser.id);
+        const completedCount = subChapters.filter(subChapter => {
+            const subProgress = progress.find(p => p.chapterId === subChapter.id);
+            return subProgress && subProgress.completed;
+        }).length;
+
+        return completedCount === subChapters.length;
+    },
+
+    // ==================== Update Sub-Chapter UI ====================
+    async updateSubChapterUI(courseId, chapterId) {
+        const chapter = CHAPTERS_DATA[courseId].find(c => c.id === chapterId);
+        if (!chapter || !chapter.subChapters) return;
+
+        const allCompleted = await this.checkAllSubChaptersCompleted(chapterId, chapter.subChapters);
+
+        const statusBadge = document.getElementById(`status-list-${chapterId}`);
+        const chapterCard = document.querySelector(`#status-list-${chapterId}`)?.closest('.chapter-card');
+
+        if (allCompleted) {
+            // All sub-chapters completed
+            if (statusBadge) {
+                statusBadge.innerHTML = '<i class="ri-check-line mr-1"></i> Selesai';
+                statusBadge.classList.remove('pending', 'badge-ghost');
+                statusBadge.classList.add('completed', 'badge-success');
+            }
+
+            if (chapterCard) {
+                chapterCard.classList.add('completed');
+            }
+
+            // Add certificate for chapter
+            const certExists = await database.checkChapterCompletion(app.currentUser.id, chapterId);
+            if (!certExists) {
+                await database.addCertificate(app.currentUser.id, chapterId, `${COURSES_CONFIG[courseId].title} - ${chapter.title}`);
+                utils.showNotification('🎉 Selamat! Kamu mendapat sertifikat!', 'success');
+                this.updateDashboardProgress();
+            }
+        } else {
+            // Not all sub-chapters completed
+            if (statusBadge) {
+                const completedCount = chapter.subChapters.filter(async (sub) => {
+                    const progress = await database.getUserProgress(app.currentUser.id);
+                    const subProgress = progress.find(p => p.chapterId === sub.id);
+                    return subProgress && subProgress.completed;
+                }).length;
+                statusBadge.innerHTML = `<i class="ri-time-line mr-1"></i> ${completedCount}/${chapter.subChapters.length}`;
+            }
+
+            if (chapterCard) {
+                chapterCard.classList.remove('completed');
+            }
+        }
+    },
+
+    // ==================== Open Sub-Chapter View ====================
+    async openSubChapterView(courseId, chapterId, subChapterId) {
+        const course = COURSES_CONFIG[courseId];
+        const chapter = CHAPTERS_DATA[courseId].find(c => c.id === chapterId);
+        const subChapter = chapter.subChapters.find(sc => sc.id === subChapterId);
+        const container = document.getElementById('material-container');
+
+        router.showMaterialView();
+
+        // Show loading state
+        container.innerHTML = `
+            <div class="max-w-4xl mx-auto">
+                <div class="card shadow-soft-lg bg-white animate-pulse rounded-3xl">
+                    <div class="card-body p-8">
+                        <div class="h-8 bg-gray-200 rounded w-3/4 mb-4"></div>
+                        <div class="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                        <div class="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                        <div class="h-4 bg-gray-200 rounded w-2/3"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Load markdown content
+        const contentHtml = await utils.loadMarkdownFile(subChapter.mdFile.split('#')[0]);
+        
+        // Get first letter of course title
+        const initial = course.title.charAt(0).toUpperCase();
+
+        // Store current courseId and chapterId for navigation
+        this.currentViewCourseId = courseId;
+        this.currentViewChapterId = chapterId;
+
+        container.innerHTML = `
+            <div class="max-w-4xl mx-auto animate-slide-up">
+                <!-- Navigation -->
+                <div class="mb-6 flex items-center justify-between">
+                    <button class="back-to-chapters-top-btn inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all">
+                        <i class="ri-arrow-left-line"></i> Kembali ke Daftar Chapter
+                    </button>
+                    <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium bg-white border border-gray-200 text-gray-700">
+                        <span class="w-6 h-6 rounded bg-gradient-to-br ${course.color} flex items-center justify-center text-white text-xs font-bold">${initial}</span>
+                        ${course.title}
+                    </span>
+                </div>
+
+                <!-- Content Card -->
+                <div class="card shadow-soft-lg bg-white border border-gray-200 overflow-hidden rounded-3xl">
+                    <!-- Header -->
+                    <div class="card-body bg-gradient-to-r ${course.color} text-white p-8">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <div>
+                                <p class="text-white/80 text-sm font-medium mb-1 inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full">
+                                    Chapter ${CHAPTERS_DATA[courseId].findIndex(c => c.id === chapterId) + 1} • Sub-Chapter ${chapter.subChapters.findIndex(sc => sc.id === subChapterId) + 1}
+                                </p>
+                                <h1 class="text-3xl font-display font-bold chapter-title-large">${subChapter.title}</h1>
+                                <p class="text-white/90 text-sm mt-2">${chapter.title}</p>
+                            </div>
+                            <div class="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm shadow-lg flex-shrink-0">
+                                <span class="text-2xl font-display font-bold text-white">${initial}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Markdown Content -->
+                    <div class="p-8 content-body-wrapper bg-white">
+                        <div class="content-body prose prose-lg max-w-none ${subChapterId}-content">
+                            ${contentHtml}
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="card-actions justify-center p-6 pt-0 gap-4 bg-white">
+                        <button class="complete-subchapter-btn py-3.5 px-8 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold rounded-xl shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40 transition-all duration-300 inline-flex items-center gap-2" data-subchapter="${subChapterId}" data-chapter="${chapterId}" data-course="${courseId}">
+                            <i class="ri-checkbox-circle-line text-xl"></i> Tandai Selesai
+                        </button>
+                        <button class="back-to-chapters-btn py-3.5 px-8 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-all inline-flex items-center gap-2">
+                            <i class="ri-arrow-left-line"></i> Kembali
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Add event listeners to back buttons
+        container.querySelectorAll('.back-to-chapters-top-btn, .back-to-chapters-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // Navigate back to chapter list with sub-chapters visible
+                router.showChaptersList(this.currentViewCourseId);
+                // Expand the current chapter after a short delay
+                setTimeout(() => {
+                    const subChaptersContainer = document.getElementById(`subchapters-${this.currentViewChapterId}`);
+                    const toggleIcon = document.querySelector(`#status-list-${this.currentViewChapterId}`)?.closest('.chapter-header')?.querySelector('.toggle-icon');
+                    if (subChaptersContainer) {
+                        subChaptersContainer.classList.remove('hidden');
+                    }
+                    if (toggleIcon) {
+                        toggleIcon.style.transform = 'rotate(180deg)';
+                    }
+                }, 100);
+            });
+        });
+
+        // Add copy buttons and language labels to code blocks
+        this.addCopyButtonsAndLanguageLabels(container);
+
+        // Apply Prism syntax highlighting
+        this.applySyntaxHighlighting(container);
+
+        // Check if already completed
+        const progress = await database.getUserProgress(app.currentUser.id);
+        const subChapterProgress = progress.find(p => p.chapterId === subChapterId);
+        const completeBtn = container.querySelector('.complete-subchapter-btn');
+        
+        if (subChapterProgress && subChapterProgress.completed) {
+            completeBtn.classList.add('bg-gradient-to-r', 'from-success', 'to-emerald-500');
+            completeBtn.classList.remove('from-primary-500', 'to-primary-600');
+            completeBtn.innerHTML = '<i class="ri-check-line"></i> Sudah Selesai';
+            completeBtn.disabled = true;
+        }
+
+        // Add event listener for complete button
+        completeBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const btn = e.target.closest('button');
+
+            if (btn.disabled) return;
+            btn.disabled = true;
+
+            // Save sub-chapter progress
+            await database.saveSubChapterProgress(app.currentUser.id, subChapterId, chapterId, courseId, true);
+
+            // Mark checkbox as checked
+            const checkbox = document.getElementById(`checkbox-${subChapterId}`);
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+
+            // Show success state
+            btn.classList.add('bg-gradient-to-r', 'from-success', 'to-emerald-500');
+            btn.classList.remove('from-primary-500', 'to-primary-600');
+            btn.innerHTML = '<i class="ri-check-line"></i> Sub-Chapter Selesai!';
+
+            // Update back button to go to chapter list
+            const backBtn = container.querySelector('.back-to-chapters-btn');
+            backBtn.innerHTML = '<i class="ri-refresh-line"></i> Lihat Daftar Chapter';
+            backBtn.onclick = () => {
+                // Navigate back to chapter list with sub-chapters visible
+                router.showChaptersList(courseId);
+                // Expand the current chapter after a short delay
+                setTimeout(() => {
+                    const subChaptersContainer = document.getElementById(`subchapters-${chapterId}`);
+                    const toggleIcon = document.querySelector(`#status-list-${chapterId}`)?.closest('.chapter-header')?.querySelector('.toggle-icon');
+                    if (subChaptersContainer) {
+                        subChaptersContainer.classList.remove('hidden');
+                    }
+                    if (toggleIcon) {
+                        toggleIcon.style.transform = 'rotate(180deg)';
+                    }
+                    // Update progress on the chapter list
+                    this.updateSubChapterUI(courseId, chapterId);
+                }, 100);
+            };
+
+            // Update dashboard progress
+            this.updateDashboardProgress();
+
+            // Check if all sub-chapters completed
+            const allCompleted = await this.checkAllSubChaptersCompleted(chapterId, chapter.subChapters);
+            if (allCompleted) {
+                // Add certificate for chapter
+                const certExists = await database.checkChapterCompletion(app.currentUser.id, chapterId);
+                if (!certExists) {
+                    await database.addCertificate(app.currentUser.id, chapterId, `${course.title} - ${chapter.title}`);
+                    // Show certificate popup after a delay
+                    setTimeout(() => {
+                        this.showCertificatePopup(`${course.title} - ${chapter.title}`);
+                    }, 500);
+                }
+            }
+        });
+
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
     // ==================== Isolated Chapter View ====================
@@ -268,7 +600,7 @@ const ui = {
         this.applySyntaxHighlighting(container);
 
         // Add event listener for complete button
-        container.querySelector('.complete-chapter-btn').addEventListener('click', async (e) => {
+        container.querySelector('.complete-chapter-btn')?.addEventListener('click', async (e) => {
             e.stopPropagation();
             const btn = e.target.closest('button');
 
@@ -318,12 +650,23 @@ const ui = {
                 const courseCard = document.querySelector(`.course-card[data-course="${courseId}"]`);
 
                 if (courseCard) {
-                    const completedChapters = progress.filter(p =>
-                        p.courseId === courseId && p.completed
-                    ).length;
+                    // Count total sub-chapters and completed sub-chapters
+                    let totalSubChapters = 0;
+                    let completedSubChapters = 0;
 
-                    const totalChapters = CHAPTERS_DATA[courseId].length;
-                    const percentage = Math.round((completedChapters / totalChapters) * 100);
+                    CHAPTERS_DATA[courseId].forEach(chapter => {
+                        if (chapter.subChapters) {
+                            totalSubChapters += chapter.subChapters.length;
+                            chapter.subChapters.forEach(subChapter => {
+                                const subProgress = progress.find(p => p.chapterId === subChapter.id);
+                                if (subProgress && subProgress.completed) {
+                                    completedSubChapters++;
+                                }
+                            });
+                        }
+                    });
+
+                    const percentage = totalSubChapters > 0 ? Math.round((completedSubChapters / totalSubChapters) * 100) : 0;
 
                     const progressBar = courseCard.querySelector('.progress-fill');
                     const progressText = courseCard.querySelector('.progress-text');

@@ -30,5 +30,14 @@ const COURSES_CONFIG = {
         description: 'Bahasa Pemrograman Serba Guna',
         color: 'from-blue-500 to-green-500',
         mdFolder: 'md/python/'
+    },
+    podman: {
+        id: 'podman',
+        title: 'Podman',
+        icon: 'ri-container-line',
+        iconColor: 'text-blue-600',
+        description: 'Container Engine untuk Deployment Modern',
+        color: 'from-blue-600 to-cyan-500',
+        mdFolder: 'md/podman/'
     }
 };
